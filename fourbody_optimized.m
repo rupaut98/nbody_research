@@ -40,7 +40,7 @@ converged_flags = false(1, num_guesses); % To track convergence
 % Loop over all initial guesses using parallel processing for efficiency
 parfor i = 1:num_guesses
     x0 = initial_guesses(i, :)';
-    [x_sol, converged] = newton_method(x0, max_iter, tol);
+    [x_sol, converged] = newton_method(x0, max_iter, tol, lb, ub);
     if converged
         % Compute f34 to check acceptability
         f34 = compute_f34(x_sol);
@@ -62,9 +62,29 @@ valid_indices = converged_flags;
 solutions = solutions(:, valid_indices);
 f34_values = f34_values(valid_indices);
 
-% Remove duplicate solutions by rounding and using 'unique'
-[unique_solutions, ia, ~] = unique(round(solutions', 8), 'rows');
-unique_f34_values = f34_values(ia);
+% Remove duplicate solutions with enhanced filtering
+tolerance = 1e-6; % Define a tolerance for considering solutions as duplicates
+
+% Initialize an empty array to hold unique solutions
+unique_solutions = [];
+unique_f34_values = [];
+
+for i = 1:size(solutions, 2)
+    sol = solutions(:, i);
+    
+    % Check if the solution is already in unique_solutions within the tolerance
+    if isempty(unique_solutions)
+        unique_solutions = sol';
+        unique_f34_values = f34_values(i);
+    else
+        % Compute the distance between the current solution and all unique solutions
+        distances = sqrt(sum((unique_solutions - sol').^2, 2));
+        if all(distances > tolerance)
+            unique_solutions = [unique_solutions; sol'];
+            unique_f34_values = [unique_f34_values; f34_values(i)];
+        end
+    end
+end
 
 % Define additional filtering criteria
 min_x3 = 1e-3; % Minimum allowable x3
@@ -92,19 +112,20 @@ end
 % Local Function Definitions
 % -------------------------------------------------------------------------
 
-function [x, converged] = newton_method(x0, max_iter, tol)
-    % newton_method performs Newton-Raphson iterations with line search
+function [x, converged] = newton_method(x0, max_iter, tol, lb, ub)
+    % newton_method performs Newton-Raphson iterations with line search and bounds checking
     % Inputs:
     %   x0 - Initial guess (4x1 vector)
     %   max_iter - Maximum number of iterations
     %   tol - Tolerance for convergence
+    %   lb - Lower bounds (4x1 vector)
+    %   ub - Upper bounds (4x1 vector)
     % Outputs:
     %   x - Solution vector
     %   converged - Boolean indicating if convergence was achieved
 
     x = x0;
     converged = false;
-    alpha = 1; % Initial damping factor
 
     for iter = 1:max_iter
         F = myfun(x);            % Compute residuals
@@ -117,14 +138,29 @@ function [x, converged] = newton_method(x0, max_iter, tol)
 
         delta = -J \ F;           % Compute update
 
-        % Line search to ensure sufficient decrease
+        alpha = 1; % Reset alpha at each iteration
+
+        % Line search to ensure sufficient decrease and within bounds
         while true
             x_new = x + alpha * delta;
-            F_new = myfun(x_new);
-            if norm(F_new) < norm(F) || alpha < 1e-4
-                break;
+
+            % Check if x_new is within bounds
+            if any(x_new < lb) || any(x_new > ub)
+                % Step goes out of bounds, reduce alpha
+                alpha = alpha / 2;
+                if alpha < 1e-4
+                    break; % Give up on this step
+                end
+                continue; % Try with reduced alpha
             end
-            alpha = alpha / 2; % Reduce step size
+
+            F_new = myfun(x_new);
+
+            if norm(F_new) < norm(F) || alpha < 1e-4
+                break; % Accept the step
+            end
+
+            alpha = alpha / 2; % Reduce step size and retry
         end
 
         x = x_new; % Update solution
@@ -144,9 +180,11 @@ function J = jacobian_num(x)
     %   J - Jacobian matrix (4x4)
 
     epsilon = 1e-6;
-    n = length(x);
-    J = zeros(n);
-    F0 = myfun(x);
+    n = length(x);          % Number of variables (4)
+    F0 = myfun(x);          % Current residuals (4x1)
+    m = length(F0);         % Number of residuals (4)
+    J = zeros(m, n);        % Initialize Jacobian (4x4)
+
     for i = 1:n
         x_eps_plus = x;
         x_eps_minus = x;
@@ -159,20 +197,16 @@ function J = jacobian_num(x)
 end
 
 function F = myfun(x)
-    % myfun computes the residuals of the system of equations with penalty terms
+    % myfun computes the residuals of the system of equations
     % Input:
     %   x - vector of variables [x3; x4; y3; y4]
     % Output:
-    %   F - vector of residuals [f12; f13; f24; f34; penalty_x3; penalty_y4]
+    %   F - vector of residuals [f12; f13; f24; f34]
 
     F_original = compute_residuals(x);
     
-    % Compute penalty terms to discourage x3 and y4 from being zero
-    penalty_x3 = 1e6 * x(1)^2;     % Penalize small x3
-    penalty_y4 = 1e6 * x(4)^2;     % Penalize small y4
-    
-    % Combine original residuals with penalties
-    F = [F_original; penalty_x3; penalty_y4];
+    % Return only the original residuals without penalties
+    F = F_original;
 end
 
 function F_original = compute_residuals(x)
