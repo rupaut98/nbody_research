@@ -1,6 +1,6 @@
 % fourbody_trial_optimized.m
 % Script to find multiple concave central configurations for the four-body problem
-% using Newton's Method with grid sampling and constraints.
+% using Newton's Method with grid sampling, Latin Hypercube Sampling, and constraints.
 
 % Clear workspace and command window for a clean environment
 clear;
@@ -19,7 +19,7 @@ x4_vals = linspace(lb(2), ub(2), num_divisions(2));
 y3_vals = linspace(lb(3), ub(3), num_divisions(3));
 y4_vals = linspace(lb(4), ub(4), num_divisions(4));
 
-% Create all combinations of initial guesses
+% Create all combinations of grid-based initial guesses
 [X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals);
 grid_guesses = [X3_grid(:), X4_grid(:), Y3_grid(:), Y4_grid(:)];
 
@@ -27,8 +27,13 @@ grid_guesses = [X3_grid(:), X4_grid(:), Y3_grid(:), Y4_grid(:)];
 num_random_guesses = 10000; % Adjust based on computational resources
 random_guesses = lb' + rand(num_random_guesses, 4) .* (ub' - lb');
 
-% Combine grid and random guesses
-initial_guesses = [grid_guesses; random_guesses];
+% Generate Latin Hypercube Sampling (optional)
+num_lhs = 20000; % Adjust based on computational resources
+lhs_samples = lhsdesign(num_lhs, 4);
+lhs_guesses = lb' + lhs_samples .* (ub' - lb');
+
+% Combine all initial guesses
+initial_guesses = [grid_guesses; random_guesses; lhs_guesses];
 
 % Parameters for Newton's Method
 max_iter = 100;     % Maximum number of iterations
@@ -40,9 +45,10 @@ solutions = NaN(4, num_guesses);     % To store [x3; x4; y3; y4]
 f34_values = NaN(1, num_guesses);   % To store f34 values
 converged_flags = false(1, num_guesses); % To track convergence
 
-% Open parallel pool for faster computation (optional)
-% Uncomment the next line if you have the Parallel Computing Toolbox
-% parpool;
+% Initialize Parallel Pool
+if isempty(gcp('nocreate'))
+    parpool; % Automatically uses available workers
+end
 
 % Loop over all initial guesses using parallel processing for efficiency
 parfor i = 1:num_guesses
@@ -60,9 +66,8 @@ parfor i = 1:num_guesses
     end
 end
 
-% Close parallel pool if it was opened
-% Uncomment the next line if you opened the parallel pool
-% delete(gcp);
+% Close parallel pool if desired
+% delete(gcp); % Uncomment to close the pool
 
 % Extract only the converged and acceptable solutions
 valid_indices = converged_flags;
@@ -72,7 +77,7 @@ f34_values = f34_values(valid_indices);
 fprintf('Number of converged solutions: %d\n', size(solutions, 2));
 
 % Remove duplicate solutions with enhanced filtering
-tolerance = 1e-4; % Define a tolerance for considering solutions as duplicates
+tolerance = 1e-5; % Adjusted tolerance for uniqueness
 
 % Initialize empty arrays for unique solutions and their f34 values
 unique_solutions = [];
@@ -177,10 +182,16 @@ function [x, converged] = newton_method(x0, max_iter, tol, lb, ub)
             alpha = alpha / 2; % Reduce step size and retry
         end
 
-        x = x_new; % Update solution
+        % Only update x if x_new is within bounds
+        if all(x_new >= lb) && all(x_new <= ub)
+            x = x_new; % Update solution
 
-        if norm(delta) < tol
-            converged = true;
+            if norm(delta) < tol
+                converged = true;
+                break;
+            end
+        else
+            % Step was not successful in finding a valid x_new within bounds
             break;
         end
     end
@@ -218,7 +229,7 @@ function F = myfun(x)
     %   F - vector of residuals [f12; f13; f24; f34]
 
     F_original = compute_residuals(x);
-    
+
     % Return only the original residuals without penalties
     F = F_original;
 end
