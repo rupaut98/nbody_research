@@ -7,8 +7,8 @@ clear;
 clc;
 
 % Define expanded bounds for the variables [x3; x4; y3; y4]
-lb = [1e-3; -6; 1.73; 1e-3];     % Lower bounds with non-zero minima
-ub = [3; 1; 5; 3.73];            % Upper bounds expanded to include previous solutions
+lb = [0.2; -0.71; 1.73; 0.58];      % Lower bounds with non-zero minima
+ub = [0.6; 0.0; 3.23;  1.73];         % Upper bounds expanded to include previous solutions
 
 % Define the number of divisions for each variable in the grid
 num_divisions = [20, 20, 20, 20]; % Increased from 10 to 20 divisions per variable
@@ -229,38 +229,47 @@ function F_original = compute_residuals(x)
     %   x - vector of variables [x3; x4; y3; y4]
     % Output:
     %   F_original - vector of residuals [f12; f13; f24; f34]
-
+    
+    % Unpack variables
     x3 = x(1);
     x4 = x(2);
     y3 = x(3);
     y4 = x(4);
-
-    % Compute common terms to simplify expressions
+    
+    % Define masses
+    m1 = 3;
+    m2 = 2;
+    m3 = 1;
+    m4 = 5;
+    
+    % Precompute distances and their inverses raised to the power -3/2
     term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
     term_b = ((1 - x3)^2 + y3^2)^(-3/2);
     term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
     term_d = ((1 - x4)^2 + y4^2)^(-3/2);
     term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
     term_f = ((x3 - 1)^2 + y3^2)^(-3/2);
-
-    % f12 equation
-    f12 = 2 * (term_a - term_b) * y3 + 2 * (5 * term_c - 5 * term_d) * y4;
-
-    % f13 equation
-    f13 = -2 * (0.25 - 2 * term_b) * y3 + ...
-          (5 * term_c - 5 * term_e) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4));
-
-    % f24 equation
-    f24 = 2 * (0.375 - 3 * term_c) * y4 + ...
-          (term_f - term_e) * (-y3*(1 - x4) - y4*(x3 - 1));
-
-    % f34 equation
-    f34 = (3 * term_a - 3 * term_c) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4)) + ...
-          (2 * term_b - 2 * term_d) * (y3*(1 - x4) + y4*(x3 - 1));
-
+    
+    % For f12:
+    f12 = 2 * m3 * (term_a - term_b) * y3 + 2 * m4 * (term_c - term_d) * y4;
+    
+    % For f13:
+    term_constant = 1/8; % sqrt(4)/16 simplifies to 1/8
+    f13 = -2 * m2 * (term_constant - term_b) * y3 + ...
+          m4 * (term_c - term_e) * ((x4 + 1) * (y4 - y3) + y3 * (x3 - x4));
+    
+    % For f24:
+    f24 = 2 * m1 * (term_constant - term_c) * y4 + ...
+          m3 * (term_f - term_e) * (-y3 * (1 - x4) - y4 * (x3 - 1));
+    
+    % For f34:
+    f34 = m1 * (term_a - term_c) * ((x4 + 1) * (y4 - y3) + y3 * (x3 - x4)) + ...
+          m2 * (term_b - term_d) * (y3 * (1 - x4) + y4 * (x3 - 1));
+    
     % Combine residuals
     F_original = [f12; f13; f24; f34];
 end
+
 
 function f34 = compute_f34(x)
     % compute_f34 computes f34 for a given solution
@@ -269,12 +278,19 @@ function f34 = compute_f34(x)
     % Output:
     %   f34 - value of f34
 
+    % Unpack variables
     x3 = x(1);
     x4 = x(2);
     y3 = x(3);
     y4 = x(4);
 
-    % Compute common terms to simplify expressions
+    % Define masses
+    m1 = 3;
+    m2 = 2;
+    m3 = 1;
+    m4 = 5;
+
+    % Precompute distances and their inverses raised to the power -3/2
     term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
     term_b = ((1 - x3)^2 + y3^2)^(-3/2);
     term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
@@ -282,7 +298,8 @@ function f34 = compute_f34(x)
     term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
     term_f = ((x3 - 1)^2 + y3^2)^(-3/2);
 
-    % f34 equation
-    f34 = (3 * term_a - 3 * term_c) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4)) + ...
-          (2 * term_b - 2 * term_d) * (y3*(1 - x4) + y4*(x3 - 1));
+    % Compute f34 using the updated equation with masses
+    f34 = m1 * (term_a - term_c) * ((x4 + 1) * (y4 - y3) + y3 * (x3 - x4)) + ...
+          m2 * (term_b - term_d) * (y3 * (1 - x4) + y4 * (x3 - 1));
 end
+
