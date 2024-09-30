@@ -1,3 +1,9 @@
+% Comment for Nishan: lower bound and upper bound can be changed to fit the problem
+%it can be changed from the lines 16-17
+%if you would like to change the masses, it would need to be changed from two functions
+% function F_original = compute_residuals(x) in lines (246-249)
+% function function f34 = compute_f34(x) in lines (294-297)
+
 % fourbody_trial_optimized.m
 % Script to find multiple concave central configurations for the four-body problem
 % using Newton's Method with grid sampling and constraints.
@@ -7,8 +13,8 @@ clear;
 clc;
 
 % Define expanded bounds for the variables [x3; x4; y3; y4]
-lb = [0.2; -0.71; 1.73; 0.58];      % Lower bounds with non-zero minima
-ub = [0.6; 0.0; 3.23;  1.73];         % Upper bounds expanded to include previous solutions
+lb = [0; -1; 1.73; 0];     % Lower bounds with non-zero minima
+ub = [1; 0; 3.73; 1.73];           % Upper bounds expanded to include previous solutions
 
 % Define the number of divisions for each variable in the grid
 num_divisions = [20, 20, 20, 20]; % Increased from 10 to 20 divisions per variable
@@ -237,9 +243,9 @@ function F_original = compute_residuals(x)
     y4 = x(4);
     
     % Define masses
-    m1 = 3;
-    m2 = 2;
-    m3 = 1;
+    m1 = 5;
+    m2 = 4;
+    m3 = 3;
     m4 = 5;
     
     % Precompute distances and their inverses raised to the power -3/2
@@ -285,9 +291,9 @@ function f34 = compute_f34(x)
     y4 = x(4);
 
     % Define masses
-    m1 = 3;
-    m2 = 2;
-    m3 = 1;
+    m1 = 5;
+    m2 = 4;
+    m3 = 3;
     m4 = 5;
 
     % Precompute distances and their inverses raised to the power -3/2
