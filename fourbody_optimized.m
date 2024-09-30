@@ -1,6 +1,6 @@
 % Comment for Nishan: lower bound and upper bound can be changed to fit the problem
-%it can be changed from the lines 16-17
-%if you would like to change the masses, it would need to be changed from two functions
+%                     it can be changed from the lines 16-17
+% if you would like to change the masses, it would need to be changed from two following functions
 % function F_original = compute_residuals(x) in lines (246-249)
 % function function f34 = compute_f34(x) in lines (294-297)
 
