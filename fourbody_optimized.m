@@ -20,13 +20,14 @@ ub = [1; 0; 3.73; 1.73];           % Upper bounds expanded to include previous s
 num_divisions = [20, 20, 20, 20]; % Increased from 10 to 20 divisions per variable
 
 % Generate grid points for each variable
-x3_vals = linspace(lb(1), ub(1), num_divisions(1));
-x4_vals = linspace(lb(2), ub(2), num_divisions(2));
+x3_vals = linspace(lb(1), ub(1), num_divisions(1)); %--> linspace(start, end, number of divisions)
+x4_vals = linspace(lb(2), ub(2), num_divisions(2)); % so for x3 there would be 20 divisions between 0 and 1
 y3_vals = linspace(lb(3), ub(3), num_divisions(3));
 y4_vals = linspace(lb(4), ub(4), num_divisions(4));
 
+
 % Create all combinations of initial guesses
-[X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals);
+[X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals); %This will create a grid of values 
 grid_guesses = [X3_grid(:), X4_grid(:), Y3_grid(:), Y4_grid(:)];
 
 % Generate additional random initial guesses
@@ -38,7 +39,7 @@ initial_guesses = [grid_guesses; random_guesses];
 
 % Parameters for Newton's Method
 max_iter = 100;     % Maximum number of iterations
-tol = 1e-8;         % Tolerance for convergence
+tol = 1e-5;         % Tolerance for convergence
 
 % Preallocate storage for solutions
 num_guesses = size(initial_guesses, 1);
