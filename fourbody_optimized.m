@@ -1,8 +1,9 @@
 % Comment for Nishan: lower bound and upper bound can be changed to fit the problem
 % It can be changed from the lines 16-17
-% If you would like to change the masses, it would need to be changed from two functions
+% If you would like to change the masses, it only needs to be changed in the global declaration
 % function F_original = compute_residuals(x) in lines (246-249)
-% function function f34 = compute_f34(x) in lines (294-297)
+% function f14 = compute_f14(x) in lines (294-297)
+% function f23 = compute_f23(x) in lines (XXX-YYY)
 
 % fourbody_trial_optimized.m
 % Script to find multiple concave central configurations for the four-body problem
@@ -12,7 +13,21 @@
 clear;
 clc;
 
-% Define expanded bounds for the variables [x3; x4; y3; y4]
+% -------------------------------------------------------------------------
+% Global Mass Definitions
+% -------------------------------------------------------------------------
+% Define masses as global variables so they can be accessed in all functions
+global m1 m2 m3 m4
+
+% Set masses here
+m1 = 2;
+m2 = 1;
+m3 = 1;
+m4 = 1;
+
+% -------------------------------------------------------------------------
+% Define Expanded Bounds for the Variables [x3; x4; y3; y4]
+% -------------------------------------------------------------------------
 % lb = [0; -1; 1.73; 0];     % Lower bounds with non-zero minima
 % ub = [1; 0; 3.73; 1.73];           % Upper bounds expanded to include previous solutions
 
@@ -28,9 +43,8 @@ x4_vals = linspace(lb(2), ub(2), num_divisions(2)); % so for x3 there would be 2
 y3_vals = linspace(lb(3), ub(3), num_divisions(3));
 y4_vals = linspace(lb(4), ub(4), num_divisions(4));
 
-
 % Create all combinations of initial guesses
-[X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals); %This will create a grid of values 
+[X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals); % This will create a grid of values 
 grid_guesses = [X3_grid(:), X4_grid(:), Y3_grid(:), Y4_grid(:)];
 
 % Generate additional random initial guesses
@@ -248,19 +262,15 @@ function F_original = compute_residuals(x)
     %   x - vector of variables [x3; x4; y3; y4]
     % Output:
     %   F_original - vector of residuals [f12; f13; f24; f34]
-    
+
+    global m1 m2 m3 m4 % Access global masses
+
     % Unpack variables
     x3 = x(1);
     x4 = x(2);
     y3 = x(3);
     y4 = x(4);
-    
-    % Define masses
-    m1 = 1;
-    m2 = 1;
-    m3 = 1;
-    m4 = 1;
-    
+
     % Compute terms with exponents expressed as (-0.3e1 / 0.2e1) which equals -3/2
     term_a = ((-1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1);
     term_b = ((1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1);
@@ -268,23 +278,23 @@ function F_original = compute_residuals(x)
     term_d = ((1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1);
     term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-0.3e1 / 0.2e1);
     term_f = ((x3 - 1)^2 + y3^2)^(-0.3e1 / 0.2e1);
-    
+
     % For f12:
     f12 = 2 * m3 * (term_a - term_b) * y3 + ...
           2 * m4 * (term_c - term_d) * y4;
-    
+
     % For f13:
     f13 = -0.2e1 * m2 * (sqrt(0.4e1) / 0.16e2 - term_b) * y3 + ...
           m4 * (term_c - term_e) * ( (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) );
-    
+
     % For f24:
     f24 = 0.2e1 * m1 * (sqrt(0.4e1) / 0.16e2 - term_c) * y4 - ...
           m3 * (term_f - term_e) * ( y3 * (1 - x4) + y4 * (x3 - 1) );
-    
+
     % For f34:
     f34 = m1 * (term_a - term_c) * ( (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) ) + ...
           m2 * (term_b - term_d) * ( y3 * (1 - x4) + y4 * (x3 - 1) );
-    
+
     % Combine residuals
     F_original = [f12; f13; f24; f34];
 end
@@ -296,17 +306,13 @@ function f14 = compute_f14(x)
     % Output:
     %   f14 - value of f14
 
+    global m1 m2 m3 m4 % Access global masses
+
     % Unpack variables
     x3 = x(1);
     x4 = x(2);
     y3 = x(3);
     y4 = x(4);
-
-    % Define masses
-    m1 = 1;
-    m2 = 1;
-    m3 = 1;
-    m4 = 1;
 
     % Define constant term
     term_constant = sqrt(4) / 16; % Simplifies to 1/8
@@ -318,10 +324,10 @@ function f14 = compute_f14(x)
     term_d = ((1 - x4)^2 + y4^2)^(-3/2);
     term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
     term_f = ((x3 - 1)^2 + y3^2)^(-3/2);
-    
+
     % Compute f14 using the updated equation with masses
     f14 = -2 * m2 * (term_constant - term_d) * y3 + ...
-           m3 * (term_a - term_e) * ( ... % Complete the expression
+           m3 * (term_a - term_e) * ( ...
                (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) ...
            );
 end
@@ -333,17 +339,13 @@ function f23 = compute_f23(x)
     % Output:
     %   f23 - value of f23
 
+    global m1 m2 m3 m4 % Access global masses
+
     % Unpack variables
     x3 = x(1);
     x4 = x(2);
     y3 = x(3);
     y4 = x(4);
-
-    % Define masses
-    m1 = 1;
-    m2 = 1;
-    m3 = 1;
-    m4 = 1;
 
     % Define constant term
     term_constant = sqrt(4) / 16; % Simplifies to 1/8
@@ -355,7 +357,7 @@ function f23 = compute_f23(x)
     term_d = ((1 - x4)^2 + y4^2)^(-3/2);
     term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
     term_f = ((x4 - 1)^2 + y4^2)^(-3/2);
-    
+
     % Compute f23 using an analogous equation to f14
     f23 = 2 * m4 * (term_constant - term_f) * y4 - ...
            m2 * (term_b - term_e) * ( y3 * (x4 + 1) + y4 * (1 - x3) );
