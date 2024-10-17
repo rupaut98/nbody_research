@@ -1,6 +1,6 @@
 % Comment for Nishan: lower bound and upper bound can be changed to fit the problem
-%it can be changed from the lines 16-17
-%if you would like to change the masses, it would need to be changed from two functions
+% It can be changed from the lines 16-17
+% If you would like to change the masses, it would need to be changed from two functions
 % function F_original = compute_residuals(x) in lines (246-249)
 % function function f34 = compute_f34(x) in lines (294-297)
 
@@ -15,7 +15,6 @@ clc;
 % Define expanded bounds for the variables [x3; x4; y3; y4]
 % lb = [0; -1; 1.73; 0];     % Lower bounds with non-zero minima
 % ub = [1; 0; 3.73; 1.73];           % Upper bounds expanded to include previous solutions
-
 
 lb = [1e-3; -1; 1.73; 1e-3];     % Lower bounds with non-zero minima
 ub = [3; 1; 5; 3.73]; 
@@ -48,7 +47,8 @@ tol = 1e-5;         % Tolerance for convergence
 % Preallocate storage for solutions
 num_guesses = size(initial_guesses, 1);
 solutions = NaN(4, num_guesses);     % To store [x3; x4; y3; y4]
-f34_values = NaN(1, num_guesses);   % To store f34 values
+f14_values = NaN(1, num_guesses);   % To store f14 values
+f23_values = NaN(1, num_guesses);   % To store f23 values
 converged_flags = false(1, num_guesses); % To track convergence
 
 % Open parallel pool for faster computation (optional)
@@ -60,12 +60,14 @@ parfor i = 1:num_guesses
     x0 = initial_guesses(i, :)';
     [x_sol, converged] = newton_method(x0, max_iter, tol, lb, ub);
     if converged
-        % Compute f34 to check acceptability
-        f34 = compute_f34(x_sol);
-        if abs(f34) < tol
-            % Store the solution and f34 value
+        % Compute f14 and f23 to check acceptability
+        f14 = compute_f14(x_sol);
+        f23 = compute_f23(x_sol);
+        if abs(f14) < tol && abs(f23) < tol
+            % Store the solution and f14, f23 values
             solutions(:, i) = x_sol;
-            f34_values(i) = f34;
+            f14_values(i) = f14;
+            f23_values(i) = f23;
             converged_flags(i) = true;
         end
     end
@@ -78,23 +80,26 @@ end
 % Extract only the converged and acceptable solutions
 valid_indices = converged_flags;
 solutions = solutions(:, valid_indices);
-f34_values = f34_values(valid_indices);
+f14_values = f14_values(valid_indices);
+f23_values = f23_values(valid_indices);
 
 fprintf('Number of converged solutions: %d\n', size(solutions, 2));
 
 % Remove duplicate solutions with enhanced filtering
 tolerance = 1e-4; % Define a tolerance for considering solutions as duplicates
 
-% Initialize empty arrays for unique solutions and their f34 values
+% Initialize empty arrays for unique solutions and their f14, f23 values
 unique_solutions = [];
-unique_f34_values = [];
+unique_f14_values = [];
+unique_f23_values = [];
 
 for i = 1:size(solutions, 2)
     sol = solutions(:, i);
     
     if isempty(unique_solutions)
         unique_solutions = sol';
-        unique_f34_values = f34_values(i);
+        unique_f14_values = f14_values(i);
+        unique_f23_values = f23_values(i);
     else
         % Calculate Euclidean distance to existing unique solutions
         distances = sqrt(sum((unique_solutions - sol').^2, 2));
@@ -102,7 +107,8 @@ for i = 1:size(solutions, 2)
         % If the solution is farther than the tolerance from all unique solutions, add it
         if all(distances > tolerance)
             unique_solutions = [unique_solutions; sol'];
-            unique_f34_values = [unique_f34_values; f34_values(i)];
+            unique_f14_values = [unique_f14_values; f14_values(i)];
+            unique_f23_values = [unique_f23_values; f23_values(i)];
         end
     end
 end
@@ -116,12 +122,13 @@ min_y4 = 1e-3; % Minimum allowable y4
 % Apply filters
 filtered_indices = (unique_solutions(:, 1) >= min_x3) & (unique_solutions(:, 4) >= min_y4);
 filtered_solutions = unique_solutions(filtered_indices, :);
-filtered_f34_values = unique_f34_values(filtered_indices);
+filtered_f14_values = unique_f14_values(filtered_indices);
+filtered_f23_values = unique_f23_values(filtered_indices);
 
 fprintf('Number of filtered solutions: %d\n', size(filtered_solutions, 1));
 
 % Display the filtered acceptable solutions
-disp('Filtered Acceptable Solutions where abs(f34) < tolerance:');
+disp('Filtered Acceptable Solutions where abs(f14) < tolerance and abs(f23) < tolerance:');
 for i = 1:size(filtered_solutions, 1)
     x = filtered_solutions(i, :)';
     disp(['Solution ', num2str(i), ':']);
@@ -129,7 +136,8 @@ for i = 1:size(filtered_solutions, 1)
     disp(['x4 = ', num2str(x(2))]);
     disp(['y3 = ', num2str(x(3))]);
     disp(['y4 = ', num2str(x(4))]);
-    disp(['f34 = ', num2str(filtered_f34_values(i))]);
+    disp(['f14 = ', num2str(filtered_f14_values(i))]);
+    disp(['f23 = ', num2str(filtered_f23_values(i))]);
     disp('---------------------------');
 end
 
@@ -229,7 +237,7 @@ function F = myfun(x)
     %   F - vector of residuals [f12; f13; f24; f34]
 
     F_original = compute_residuals(x);
-    
+
     % Return only the original residuals without penalties
     F = F_original;
 end
@@ -253,39 +261,40 @@ function F_original = compute_residuals(x)
     m3 = 1;
     m4 = 1;
     
+    % Compute terms with exponents expressed as (-0.3e1 / 0.2e1) which equals -3/2
+    term_a = ((-1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1);
+    term_b = ((1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1);
+    term_c = ((-1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1);
+    term_d = ((1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1);
+    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-0.3e1 / 0.2e1);
+    term_f = ((x3 - 1)^2 + y3^2)^(-0.3e1 / 0.2e1);
     
     % For f12:
-    f12 = 2 * m3 * ( ((-1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1) - ((1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1) ) * y3 + ...
-          2 * m4 * ( ((-1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1) - ((1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1) ) * y4;
+    f12 = 2 * m3 * (term_a - term_b) * y3 + ...
+          2 * m4 * (term_c - term_d) * y4;
     
     % For f13:
-    f13 = -0.2e1 * m2 * (sqrt(0.4e1) / 0.16e2 - ((1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1)) * y3 + ...
-          m4 * ( ((-1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1) - ((x3 - x4)^2 + (y3 - y4)^2)^(-0.3e1 / 0.2e1) ) * ...
-          ( (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) );
+    f13 = -0.2e1 * m2 * (sqrt(0.4e1) / 0.16e2 - term_b) * y3 + ...
+          m4 * (term_c - term_e) * ( (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) );
     
     % For f24:
-    f24 = 0.2e1 * m1 * (sqrt(0.4e1) / 0.16e2 - ((-1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1)) * y4 - ...
-          m3 * ( ((x3 - 1)^2 + y3^2)^(-0.3e1 / 0.2e1) - ((x3 - x4)^2 + (y3 - y4)^2)^(-0.3e1 / 0.2e1) ) * ...
-          ( y3 * (1 - x4) + y4 * (x3 - 1) );
+    f24 = 0.2e1 * m1 * (sqrt(0.4e1) / 0.16e2 - term_c) * y4 - ...
+          m3 * (term_f - term_e) * ( y3 * (1 - x4) + y4 * (x3 - 1) );
     
     % For f34:
-    f34 = m1 * ( ((-1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1) - ((-1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1) ) * ...
-          ( (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) ) + ...
-          m2 * ( ((1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1) - ((1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1) ) * ...
-          ( y3 * (1 - x4) + y4 * (x3 - 1) );
+    f34 = m1 * (term_a - term_c) * ( (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) ) + ...
+          m2 * (term_b - term_d) * ( y3 * (1 - x4) + y4 * (x3 - 1) );
     
     % Combine residuals
     F_original = [f12; f13; f24; f34];
 end
 
-
-
 function f14 = compute_f14(x)
-    % compute_f34 computes f34 for a given solution
+    % compute_f14 computes f14 for a given solution
     % Input:
     %   x - vector of variables [x3; x4; y3; y4]
     % Output:
-    %   f34 - value of f34
+    %   f14 - value of f14
 
     % Unpack variables
     x3 = x(1);
@@ -299,21 +308,55 @@ function f14 = compute_f14(x)
     m3 = 1;
     m4 = 1;
 
-    term_constant = 1/8;
+    % Define constant term
+    term_constant = sqrt(4) / 16; % Simplifies to 1/8
 
-    % Precompute distances and their inverses raised to the power -3/2
+    % Compute terms with exponents expressed as (-3/2)
     term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
     term_b = ((1 - x3)^2 + y3^2)^(-3/2);
     term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
     term_d = ((1 - x4)^2 + y4^2)^(-3/2);
     term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
     term_f = ((x3 - 1)^2 + y3^2)^(-3/2);
-
-    % Compute f34 using the updated equation with masses
-    f14 = -2 * m2 * (term_constant - term_d)* y3 + m3*(term_a - term_e)*(-)
+    
+    % Compute f14 using the updated equation with masses
+    f14 = -2 * m2 * (term_constant - term_d) * y3 + ...
+           m3 * (term_a - term_e) * ( ... % Complete the expression
+               (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) ...
+           );
 end
 
-%Compute f14 and f23
-%All equal masses
-%1, 1, 1, 2
+function f23 = compute_f23(x)
+    % compute_f23 computes f23 for a given solution
+    % Input:
+    %   x - vector of variables [x3; x4; y3; y4]
+    % Output:
+    %   f23 - value of f23
 
+    % Unpack variables
+    x3 = x(1);
+    x4 = x(2);
+    y3 = x(3);
+    y4 = x(4);
+
+    % Define masses
+    m1 = 1;
+    m2 = 1;
+    m3 = 1;
+    m4 = 1;
+
+    % Define constant term
+    term_constant = sqrt(4) / 16; % Simplifies to 1/8
+
+    % Compute terms with exponents expressed as (-3/2)
+    term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
+    term_b = ((1 - x3)^2 + y3^2)^(-3/2);
+    term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
+    term_d = ((1 - x4)^2 + y4^2)^(-3/2);
+    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
+    term_f = ((x4 - 1)^2 + y4^2)^(-3/2);
+    
+    % Compute f23 using an analogous equation to f14
+    f23 = 2 * m4 * (term_constant - term_f) * y4 - ...
+           m2 * (term_b - term_e) * ( y3 * (x4 + 1) + y4 * (1 - x3) );
+end
