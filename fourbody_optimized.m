@@ -1,10 +1,3 @@
-% Comment for Nishan: lower bound and upper bound can be changed to fit the problem
-% It can be changed from the lines 16-17
-% If you would like to change the masses, it only needs to be changed in the global declaration
-% function F_original = compute_residuals(x) in lines (246-249)
-% function f14 = compute_f14(x) in lines (294-297)
-% function f23 = compute_f23(x) in lines (XXX-YYY)
-
 % fourbody_trial_optimized.m
 % Script to find multiple concave central configurations for the four-body problem
 % using Newton's Method with grid sampling and constraints.
@@ -14,24 +7,20 @@ clear;
 clc;
 
 % -------------------------------------------------------------------------
-% Global Mass Definitions
+% Mass Definitions
 % -------------------------------------------------------------------------
-% Define masses as global variables so they can be accessed in all functions
-global m1 m2 m3 m4
-
-% Set masses here
+% Define masses as variables
 m1 = 2;
 m2 = 1;
 m3 = 1;
 m4 = 1;
 
+masses = [m1, m2, m3, m4]; % Array to hold masses
+
 % -------------------------------------------------------------------------
 % Define Expanded Bounds for the Variables [x3; x4; y3; y4]
 % -------------------------------------------------------------------------
-% lb = [0; -1; 1.73; 0];     % Lower bounds with non-zero minima
-% ub = [1; 0; 3.73; 1.73];           % Upper bounds expanded to include previous solutions
-
-lb = [1e-3; -1; 1.73; 1e-3];     % Lower bounds with non-zero minima
+lb = [0; -1; 1.73; 0];     % Lower bounds with non-zero minima
 ub = [3; 1; 5; 3.73]; 
 
 % Define the number of divisions for each variable in the grid
@@ -56,13 +45,12 @@ initial_guesses = [grid_guesses; random_guesses];
 
 % Parameters for Newton's Method
 max_iter = 100;     % Maximum number of iterations
-tol = 1e-5;         % Tolerance for convergence
+tol = 1e-2;         % Tolerance for convergence
 
 % Preallocate storage for solutions
 num_guesses = size(initial_guesses, 1);
 solutions = NaN(4, num_guesses);     % To store [x3; x4; y3; y4]
 f14_values = NaN(1, num_guesses);   % To store f14 values
-f23_values = NaN(1, num_guesses);   % To store f23 values
 converged_flags = false(1, num_guesses); % To track convergence
 
 % Open parallel pool for faster computation (optional)
@@ -72,16 +60,14 @@ converged_flags = false(1, num_guesses); % To track convergence
 % Loop over all initial guesses using parallel processing for efficiency
 parfor i = 1:num_guesses
     x0 = initial_guesses(i, :)';
-    [x_sol, converged] = newton_method(x0, max_iter, tol, lb, ub);
+    [x_sol, converged] = newton_method(x0, max_iter, tol, lb, ub, masses);
     if converged
-        % Compute f14 and f23 to check acceptability
-        f14 = compute_f14(x_sol);
-        f23 = compute_f23(x_sol);
-        if abs(f14) < tol && abs(f23) < tol
-            % Store the solution and f14, f23 values
+        % Compute only f14 to check acceptability
+        f14 = compute_f14(x_sol, masses);
+        if abs(f14) < tol
+            % Store the solution and f14 value
             solutions(:, i) = x_sol;
             f14_values(i) = f14;
-            f23_values(i) = f23;
             converged_flags(i) = true;
         end
     end
@@ -95,71 +81,73 @@ end
 valid_indices = converged_flags;
 solutions = solutions(:, valid_indices);
 f14_values = f14_values(valid_indices);
-f23_values = f23_values(valid_indices);
 
 fprintf('Number of converged solutions: %d\n', size(solutions, 2));
 
-% Remove duplicate solutions with enhanced filtering
-tolerance = 1e-4; % Define a tolerance for considering solutions as duplicates
-
-% Initialize empty arrays for unique solutions and their f14, f23 values
-unique_solutions = [];
-unique_f14_values = [];
-unique_f23_values = [];
-
-for i = 1:size(solutions, 2)
-    sol = solutions(:, i);
+if size(solutions, 2) == 0
+    warning('No converged solutions found. Consider relaxing tolerance or checking residuals.');
+else
+    % Remove duplicate solutions with enhanced filtering
+    tolerance = 1e-4; % Define a tolerance for considering solutions as duplicates
     
-    if isempty(unique_solutions)
-        unique_solutions = sol';
-        unique_f14_values = f14_values(i);
-        unique_f23_values = f23_values(i);
-    else
-        % Calculate Euclidean distance to existing unique solutions
-        distances = sqrt(sum((unique_solutions - sol').^2, 2));
+    % Initialize empty arrays for unique solutions and their f14 values
+    unique_solutions = [];
+    unique_f14_values = [];
+    
+    for i = 1:size(solutions, 2)
+        sol = solutions(:, i);
         
-        % If the solution is farther than the tolerance from all unique solutions, add it
-        if all(distances > tolerance)
-            unique_solutions = [unique_solutions; sol'];
-            unique_f14_values = [unique_f14_values; f14_values(i)];
-            unique_f23_values = [unique_f23_values; f23_values(i)];
+        if isempty(unique_solutions)
+            unique_solutions = sol';
+            unique_f14_values = f14_values(i);
+        else
+            % Calculate Euclidean distance to existing unique solutions
+            distances = sqrt(sum((unique_solutions - sol').^2, 2));
+            
+            % If the solution is farther than the tolerance from all unique solutions, add it
+            if all(distances > tolerance)
+                unique_solutions = [unique_solutions; sol'];
+                unique_f14_values = [unique_f14_values; f14_values(i)];
+            end
         end
     end
-end
-
-fprintf('Number of unique solutions after filtering: %d\n', size(unique_solutions, 1));
-
-% Define additional filtering criteria
-min_x3 = 1e-3; % Minimum allowable x3
-min_y4 = 1e-3; % Minimum allowable y4
-
-% Apply filters
-filtered_indices = (unique_solutions(:, 1) >= min_x3) & (unique_solutions(:, 4) >= min_y4);
-filtered_solutions = unique_solutions(filtered_indices, :);
-filtered_f14_values = unique_f14_values(filtered_indices);
-filtered_f23_values = unique_f23_values(filtered_indices);
-
-fprintf('Number of filtered solutions: %d\n', size(filtered_solutions, 1));
-
-% Display the filtered acceptable solutions
-disp('Filtered Acceptable Solutions where abs(f14) < tolerance and abs(f23) < tolerance:');
-for i = 1:size(filtered_solutions, 1)
-    x = filtered_solutions(i, :)';
-    disp(['Solution ', num2str(i), ':']);
-    disp(['x3 = ', num2str(x(1))]);
-    disp(['x4 = ', num2str(x(2))]);
-    disp(['y3 = ', num2str(x(3))]);
-    disp(['y4 = ', num2str(x(4))]);
-    disp(['f14 = ', num2str(filtered_f14_values(i))]);
-    disp(['f23 = ', num2str(filtered_f23_values(i))]);
-    disp('---------------------------');
+    
+    fprintf('Number of unique solutions after filtering: %d\n', size(unique_solutions, 1));
+    
+    % Define additional filtering criteria
+    min_x3 = 1e-3; % Minimum allowable x3
+    min_y4 = 1e-3; % Minimum allowable y4
+    
+    % Apply filters
+    filtered_indices = (unique_solutions(:, 1) >= min_x3) & (unique_solutions(:, 4) >= min_y4);
+    filtered_solutions = unique_solutions(filtered_indices, :);
+    filtered_f14_values = unique_f14_values(filtered_indices);
+    
+    fprintf('Number of filtered solutions: %d\n', size(filtered_solutions, 1));
+    
+    if size(filtered_solutions, 1) == 0
+        warning('No filtered solutions found after applying additional criteria.');
+    else
+        % Display the filtered acceptable solutions
+        disp('Filtered Acceptable Solutions where abs(f14) < tolerance:');
+        for i = 1:size(filtered_solutions, 1)
+            x = filtered_solutions(i, :)';
+            disp(['Solution ', num2str(i), ':']);
+            disp(['x3 = ', num2str(x(1))]);
+            disp(['x4 = ', num2str(x(2))]);
+            disp(['y3 = ', num2str(x(3))]);
+            disp(['y4 = ', num2str(x(4))]);
+            disp(['f14 = ', num2str(filtered_f14_values(i))]);
+            disp('---------------------------');
+        end
+    end
 end
 
 % -------------------------------------------------------------------------
 % Local Function Definitions
 % -------------------------------------------------------------------------
 
-function [x, converged] = newton_method(x0, max_iter, tol, lb, ub)
+function [x, converged] = newton_method(x0, max_iter, tol, lb, ub, masses)
     % newton_method performs Newton-Raphson iterations with line search and bounds checking
     % Inputs:
     %   x0 - Initial guess (4x1 vector)
@@ -167,6 +155,7 @@ function [x, converged] = newton_method(x0, max_iter, tol, lb, ub)
     %   tol - Tolerance for convergence
     %   lb - Lower bounds (4x1 vector)
     %   ub - Upper bounds (4x1 vector)
+    %   masses - Array of masses [m1, m2, m3, m4]
     % Outputs:
     %   x - Solution vector
     %   converged - Boolean indicating if convergence was achieved
@@ -175,8 +164,8 @@ function [x, converged] = newton_method(x0, max_iter, tol, lb, ub)
     converged = false;
 
     for iter = 1:max_iter
-        F = myfun(x);            % Compute residuals
-        J = jacobian_num(x);     % Compute Jacobian matrix
+        F = myfun(x, masses);            % Compute residuals
+        J = jacobian_num(x, masses);     % Compute Jacobian matrix
 
         % Check if Jacobian is singular
         if rcond(J) < eps
@@ -201,7 +190,7 @@ function [x, converged] = newton_method(x0, max_iter, tol, lb, ub)
                 continue; % Try with reduced alpha
             end
 
-            F_new = myfun(x_new);
+            F_new = myfun(x_new, masses);
 
             if norm(F_new) < norm(F) || alpha < 1e-4
                 break; % Accept the step
@@ -219,51 +208,57 @@ function [x, converged] = newton_method(x0, max_iter, tol, lb, ub)
     end
 end
 
-function J = jacobian_num(x)
+function J = jacobian_num(x, masses)
     % jacobian_num computes the Jacobian matrix numerically using central differences
     % Input:
     %   x - Current solution vector (4x1)
+    %   masses - Array of masses [m1, m2, m3, m4]
     % Output:
     %   J - Jacobian matrix (4x4)
 
     epsilon = 1e-6;
-    n = length(x);          % Number of variables (4)
-    F0 = myfun(x);          % Current residuals (4x1)
-    m = length(F0);         % Number of residuals (4)
-    J = zeros(m, n);        % Initialize Jacobian (4x4)
+    F0 = myfun(x, masses);          % Current residuals (4x1)
+    m = length(F0);                 % Number of residuals (4)
+    n = length(x);                  % Number of variables (4)
+    J = zeros(m, n);                % Initialize Jacobian (4x4)
 
     for i = 1:n
         x_eps_plus = x;
         x_eps_minus = x;
         x_eps_plus(i) = x_eps_plus(i) + epsilon;
         x_eps_minus(i) = x_eps_minus(i) - epsilon;
-        F_plus = myfun(x_eps_plus);
-        F_minus = myfun(x_eps_minus);
+        F_plus = myfun(x_eps_plus, masses);
+        F_minus = myfun(x_eps_minus, masses);
         J(:, i) = (F_plus - F_minus) / (2 * epsilon); % Central difference
     end
 end
 
-function F = myfun(x)
+function F = myfun(x, masses)
     % myfun computes the residuals of the system of equations
     % Input:
     %   x - vector of variables [x3; x4; y3; y4]
+    %   masses - Array of masses [m1, m2, m3, m4]
     % Output:
     %   F - vector of residuals [f12; f13; f24; f34]
 
-    F_original = compute_residuals(x);
+    F_original = compute_residuals(x, masses);
 
     % Return only the original residuals without penalties
     F = F_original;
 end
 
-function F_original = compute_residuals(x)
+function F_original = compute_residuals(x, masses)
     % compute_residuals computes the original residuals without penalties
     % Input:
     %   x - vector of variables [x3; x4; y3; y4]
+    %   masses - Array of masses [m1, m2, m3, m4]
     % Output:
     %   F_original - vector of residuals [f12; f13; f24; f34]
 
-    global m1 m2 m3 m4 % Access global masses
+    m1 = masses(1);
+    m2 = masses(2);
+    m3 = masses(3);
+    m4 = masses(4);
 
     % Unpack variables
     x3 = x(1);
@@ -271,24 +266,24 @@ function F_original = compute_residuals(x)
     y3 = x(3);
     y4 = x(4);
 
-    % Compute terms with exponents expressed as (-0.3e1 / 0.2e1) which equals -3/2
-    term_a = ((-1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1);
-    term_b = ((1 - x3)^2 + y3^2)^(-0.3e1 / 0.2e1);
-    term_c = ((-1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1);
-    term_d = ((1 - x4)^2 + y4^2)^(-0.3e1 / 0.2e1);
-    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-0.3e1 / 0.2e1);
-    term_f = ((x3 - 1)^2 + y3^2)^(-0.3e1 / 0.2e1);
+    % Compute terms with exponents expressed as (-3/2)
+    term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
+    term_b = ((1 - x3)^2 + y3^2)^(-3/2);
+    term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
+    term_d = ((1 - x4)^2 + y4^2)^(-3/2);
+    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
+    term_f = ((x3 - 1)^2 + y3^2)^(-3/2);
 
     % For f12:
     f12 = 2 * m3 * (term_a - term_b) * y3 + ...
           2 * m4 * (term_c - term_d) * y4;
 
     % For f13:
-    f13 = -0.2e1 * m2 * (sqrt(0.4e1) / 0.16e2 - term_b) * y3 + ...
+    f13 = -2 * m2 * (sqrt(4) / 16 - term_b) * y3 + ...
           m4 * (term_c - term_e) * ( (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) );
 
     % For f24:
-    f24 = 0.2e1 * m1 * (sqrt(0.4e1) / 0.16e2 - term_c) * y4 - ...
+    f24 = 2 * m1 * (sqrt(4) / 16 - term_c) * y4 - ...
           m3 * (term_f - term_e) * ( y3 * (1 - x4) + y4 * (x3 - 1) );
 
     % For f34:
@@ -299,14 +294,18 @@ function F_original = compute_residuals(x)
     F_original = [f12; f13; f24; f34];
 end
 
-function f14 = compute_f14(x)
+function f14 = compute_f14(x, masses)
     % compute_f14 computes f14 for a given solution
     % Input:
     %   x - vector of variables [x3; x4; y3; y4]
+    %   masses - Array of masses [m1, m2, m3, m4]
     % Output:
     %   f14 - value of f14
 
-    global m1 m2 m3 m4 % Access global masses
+    m1 = masses(1);
+    m2 = masses(2);
+    m3 = masses(3);
+    m4 = masses(4);
 
     % Unpack variables
     x3 = x(1);
@@ -330,35 +329,4 @@ function f14 = compute_f14(x)
            m3 * (term_a - term_e) * ( ...
                (x4 + 1) * (y4 - y3) + y4 * (x3 - x4) ...
            );
-end
-
-function f23 = compute_f23(x)
-    % compute_f23 computes f23 for a given solution
-    % Input:
-    %   x - vector of variables [x3; x4; y3; y4]
-    % Output:
-    %   f23 - value of f23
-
-    global m1 m2 m3 m4 % Access global masses
-
-    % Unpack variables
-    x3 = x(1);
-    x4 = x(2);
-    y3 = x(3);
-    y4 = x(4);
-
-    % Define constant term
-    term_constant = sqrt(4) / 16; % Simplifies to 1/8
-
-    % Compute terms with exponents expressed as (-3/2)
-    term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
-    term_b = ((1 - x3)^2 + y3^2)^(-3/2);
-    term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
-    term_d = ((1 - x4)^2 + y4^2)^(-3/2);
-    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
-    term_f = ((x4 - 1)^2 + y4^2)^(-3/2);
-
-    % Compute f23 using an analogous equation to f14
-    f23 = 2 * m4 * (term_constant - term_f) * y4 - ...
-           m2 * (term_b - term_e) * ( y3 * (x4 + 1) + y4 * (1 - x3) );
 end
