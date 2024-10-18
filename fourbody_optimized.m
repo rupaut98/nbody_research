@@ -35,7 +35,7 @@ initial_guesses = [grid_guesses; random_guesses];
 
 % Parameters for Newton's Method
 max_iter = 100;     % Maximum number of iterations
-tol = 1e-5;         % Tolerance for convergence
+tol = 1e-6;         % Tolerance for convergence
 
 % Preallocate storage for solutions
 num_guesses = size(initial_guesses, 1);
@@ -112,7 +112,7 @@ filtered_f14_values = unique_f14_values(filtered_indices);
 fprintf('Number of filtered solutions: %d\n', size(filtered_solutions, 1));
 
 % Display the filtered acceptable solutions
-disp('Filtered Acceptable Solutions where abs(f34) < tolerance:');
+disp('Filtered Acceptable Solutions where abs(f14) < tolerance:');
 for i = 1:size(filtered_solutions, 1)
     x = filtered_solutions(i, :)';
     disp(['Solution ', num2str(i), ':']);
@@ -120,7 +120,7 @@ for i = 1:size(filtered_solutions, 1)
     disp(['x4 = ', num2str(x(2))]);
     disp(['y3 = ', num2str(x(3))]);
     disp(['y4 = ', num2str(x(4))]);
-    disp(['f34 = ', num2str(filtered_f34_values(i))]);
+    disp(['f14 = ', num2str(filtered_f14_values(i))]);
     disp('---------------------------');
 end
 
@@ -232,10 +232,10 @@ function F_original = compute_residuals(x)
     % Output:
     %   F_original - vector of residuals [f12; f13; f24; f34]
 
-    m1 = 2;
+    m1 = 3;
     m2 = 1;
     m3 = 1;
-    m4 = 1;
+    m4 = 2;
 
     % Unpack variables
     x3 = x(1);
@@ -243,29 +243,34 @@ function F_original = compute_residuals(x)
     y3 = x(3);
     y4 = x(4);
 
-    % Compute terms with exponents expressed as (-3/2)
-    term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
-    term_b = ((1 - x3)^2 + y3^2)^(-3/2);
-    term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
-    term_d = ((1 - x4)^2 + y4^2)^(-3/2);
-    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
-    term_f = ((x3 - 1)^2 + y3^2)^(-3/2);
+    % % Compute terms with exponents expressed as (-3/2)
+    % term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
+    % term_b = ((1 - x3)^2 + y3^2)^(-3/2);
+    % term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
+    % term_d = ((1 - x4)^2 + y4^2)^(-3/2);
+    % term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
+    % term_f = ((x3 - 1)^2 + y3^2)^(-3/2);
 
-    % For f12:
-    f12 = 2 * m3 * (term_a - term_b) * y3 + ...
-          2 * m4 * (term_c - term_d) * y4;
+    % % For f12:
+    % f12 = 2 * m3 * (term_a - term_b) * y3 + ...
+    %       2 * m4 * (term_c - term_d) * y4;
 
-    % For f13:
-    f13 = -2 * m2 * (1/8 - term_b) * y3 + ...
-          m4 * (term_c - term_e) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4));
+    % % For f13:
+    % f13 = -2 * m2 * (1/8 - term_b) * y3 + ...
+    %       m4 * (term_c - term_e) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4));
 
-    % For f24:
-    f24 = 2 * m1 * (1/8 - term_c) * y4 + ...
-          m3 * (term_f - term_e) * (-y3*(1 - x4) - y4*(x3 - 1));
+    % % For f24:
+    % f24 = 2 * m1 * (1/8 - term_c) * y4 + ...
+    %       m3 * (term_f - term_e) * (-y3*(1 - x4) - y4*(x3 - 1));
 
-    % For f34:
-    f34 = m1 * (term_a - term_c) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4)) + ...
-          m2 * (term_b - term_d) * (y3*(1 - x4) + y4*(x3 - 1));
+    % % For f34:
+    % f34 = m1 * (term_a - term_c) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4)) + ...
+    %       m2 * (term_b - term_d) * (y3*(1 - x4) + y4*(x3 - 1));
+
+    f12 = 2 * m3 * (((-1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1)) * y3 + 2 * m4 * (((-1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1) - ((1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1)) * y4;
+    f13 = -0.2e1 * m2 * (sqrt(0.4e1) / 0.16e2 - (((1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1))) * y3 + (m4 * (((-1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1) - ((x3 - x4) ^ 2 + (y3 - y4) ^ 2) ^ (-0.3e1 / 0.2e1)) * ((x4 + 1) * (y4 - y3) + y4 * (x3 - x4)));
+    f24 = 0.2e1 * m1 * (sqrt(0.4e1) / 0.16e2 - (((-1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1))) * y4 + (m3 * (((x3 - 1) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((x3 - x4) ^ 2 + (y3 - y4) ^ 2) ^ (-0.3e1 / 0.2e1)) * (-y3 * (1 - x4) - y4 * (x3 - 1)));
+    f34 = m1 * (((-1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((-1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1)) * ((x4 + 1) * (y4 - y3) + y4 * (x3 - x4)) + m2 * (((1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1)) * (y3 * (1 - x4) + y4 * (x3 - 1));
 
     % Combine residuals
     F_original = [f12; f13; f24; f34];
@@ -279,10 +284,10 @@ function f14 = compute_f14(x)
     % Output:
     %   f14 - value of f14
 
-    m1 = 2;
+    m1 = 3;
     m2 = 1;
     m3 = 1;
-    m4 = 1;
+    m4 = 2;
 
     % Unpack variables
     x3 = x(1);
@@ -290,16 +295,14 @@ function f14 = compute_f14(x)
     y3 = x(3);
     y4 = x(4);
 
-    % Define constant term
-    term_constant = 1/8; % sqrt(4)/16 simplifies to 1/8
+    % % Define constant term
+    % term_constant = 1/8; % sqrt(4)/16 simplifies to 1/8
 
-    % Compute terms with exponents expressed as (-3/2)
-    term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
-    term_d = ((1 - x4)^2 + y4^2)^(-3/2);
-    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
+    % % Compute terms with exponents expressed as (-3/2)
+    % term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
+    % term_d = ((1 - x4)^2 + y4^2)^(-3/2);
+    % term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
 
-    % Compute f14 using the updated equation with masses
-    f14 = -2 * m2 * (term_constant - term_d) * y4 + ...
-          m3 * (term_a - term_e) * (-(x4 + 1)*(y4 - y3) - y4*(x3 - x4));
+    f14 = -0.2e1 * m2 * (sqrt(0.4e1) / 0.16e2 - (((1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1))) * y4 + (m3 * (((-1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((x3 - x4) ^ 2 + (y3 - y4) ^ 2) ^ (-0.3e1 / 0.2e1)) * (-(x4 + 1) * (y4 - y3) - y4 * (x3 - x4)));
 end
 

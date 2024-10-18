@@ -17,7 +17,7 @@ lb = [0; -1; 1.73; 0];     % Lower bounds with non-zero minima
 ub = [1; 0; 3.73; 1.73];           % Upper bounds expanded to include previous solutions
 
 % Define the number of divisions for each variable in the grid
-num_divisions = [50, 50, 50, 50]; % Increased from 10 to 20 divisions per variable
+num_divisions = [20, 20, 20, 20]; % Increased from 10 to 20 divisions per variable
 
 % Generate grid points for each variable
 x3_vals = linspace(lb(1), ub(1), num_divisions(1)); %--> linspace(start, end, number of divisions)
@@ -38,7 +38,7 @@ random_guesses = lb' + rand(num_random_guesses, 4) .* (ub' - lb');
 initial_guesses = [grid_guesses; random_guesses];
 
 % Parameters for Newton's Method
-max_iter = 200;     % Maximum number of iterations
+max_iter = 100;     % Maximum number of iterations
 tol = 1e-5;         % Tolerance for convergence
 
 % Preallocate storage for solutions

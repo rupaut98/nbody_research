@@ -1,12 +1,12 @@
 % Comment for Nishan: lower bound and upper bound can be changed to fit the problem
-%it can be changed from the lines 16-17
-%if you would like to change the masses, it would need to be changed from two functions
-% function F_original = compute_residuals(x) in lines (246-249)
-% function function f14 = compute_f14(x) in lines (294-297)
+% It can be changed from the lines 16-17
+% If you would like to change the masses, it would need to be changed in two functions:
+% - function F_original = compute_residuals(x)
+% - function f14 = compute_f14(x)
 
 % fourbody_trial_optimized.m
 % Script to find multiple concave central configurations for the four-body problem
-% using Newton's Method with grid sampling and constraints.
+% using fsolve with grid sampling and constraints.
 
 % Clear workspace and command window for a clean environment
 clear;
@@ -14,20 +14,19 @@ clc;
 
 % Define expanded bounds for the variables [x3; x4; y3; y4]
 lb = [1e-3; -1; 1.73; 1e-3];     % Lower bounds with non-zero minima
-ub = [3; 1; 5; 3.73];           % Upper bounds expanded to include previous solutions
+ub = [3; 1; 5; 3.73];            % Upper bounds expanded to include previous solutions
 
 % Define the number of divisions for each variable in the grid
 num_divisions = [20, 20, 20, 20]; % Increased from 10 to 20 divisions per variable
 
 % Generate grid points for each variable
-x3_vals = linspace(lb(1), ub(1), num_divisions(1)); %--> linspace(start, end, number of divisions)
-x4_vals = linspace(lb(2), ub(2), num_divisions(2)); % so for x3 there would be 20 divisions between 0 and 1
+x3_vals = linspace(lb(1), ub(1), num_divisions(1)); % linspace(start, end, number of divisions)
+x4_vals = linspace(lb(2), ub(2), num_divisions(2));
 y3_vals = linspace(lb(3), ub(3), num_divisions(3));
 y4_vals = linspace(lb(4), ub(4), num_divisions(4));
 
-
 % Create all combinations of initial guesses
-[X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals); %This will create a grid of values 
+[X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals);
 grid_guesses = [X3_grid(:), X4_grid(:), Y3_grid(:), Y4_grid(:)];
 
 % Generate additional random initial guesses
@@ -37,44 +36,52 @@ random_guesses = lb' + rand(num_random_guesses, 4) .* (ub' - lb');
 % Combine grid and random guesses
 initial_guesses = [grid_guesses; random_guesses];
 
-% Parameters for Newton's Method
+% Define number of guesses
+num_guesses = size(initial_guesses, 1);
+
+% Parameters for Newton's Method and fsolve
 max_iter = 100;     % Maximum number of iterations
 tol = 1e-5;         % Tolerance for convergence
 
-% Preallocate storage for solutions
-num_guesses = size(initial_guesses, 1);
-solutions = NaN(4, num_guesses);     % To store [x3; x4; y3; y4]
-f14_values = NaN(1, num_guesses);   % To store f14 values
-converged_flags = false(1, num_guesses); % To track convergence
+% Parameters for fsolve
+options = optimoptions('fsolve', 'Display', 'off', ...
+    'MaxIterations', 1000, 'MaxFunctionEvaluations', 5000, 'FunctionTolerance', tol);
 
-% Open parallel pool for faster computation (optional)
-% Uncomment the next line if you have the Parallel Computing Toolbox
-% parpool;
+% Preallocate storage for solutions
+solutions = cell(num_guesses, 1);
+f14_values = zeros(num_guesses, 1);
+converged_flags = false(num_guesses, 1);
 
 % Loop over all initial guesses using parallel processing for efficiency
 parfor i = 1:num_guesses
     x0 = initial_guesses(i, :)';
-    [x_sol, converged] = newton_method(x0, max_iter, tol, lb, ub);
-    if converged
+
+    % Run fsolve
+    [x_sol, fval, exitflag] = fsolve(@myfun, x0, options);
+
+    if exitflag > 0 && all(abs(fval) < tol)
         % Compute f14 to check acceptability
         f14 = compute_f14(x_sol);
         if abs(f14) < tol
             % Store the solution and f14 value
-            solutions(:, i) = x_sol;
+            solutions{i} = x_sol;
             f14_values(i) = f14;
             converged_flags(i) = true;
         end
     end
 end
 
-% Close parallel pool if it was opened
-% Uncomment the next line if you opened the parallel pool
-% delete(gcp);
-
 % Extract only the converged and acceptable solutions
 valid_indices = converged_flags;
-solutions = solutions(:, valid_indices);
+solutions = solutions(valid_indices);
 f14_values = f14_values(valid_indices);
+
+% Convert solutions from cell array to matrix
+if ~isempty(solutions)
+    solutions = cell2mat(solutions')';
+else
+    solutions = [];
+end
 
 fprintf('Number of converged solutions: %d\n', size(solutions, 2));
 
@@ -122,7 +129,6 @@ else
     fprintf('No solutions found to apply filters.\n');
 end
 
-
 fprintf('Number of filtered solutions: %d\n', size(filtered_solutions, 1));
 
 % Display the filtered acceptable solutions
@@ -142,96 +148,12 @@ end
 % Local Function Definitions
 % -------------------------------------------------------------------------
 
-function [x, converged] = newton_method(x0, max_iter, tol, lb, ub)
-    % newton_method performs Newton-Raphson iterations with line search and bounds checking
-    % Inputs:
-    %   x0 - Initial guess (4x1 vector)
-    %   max_iter - Maximum number of iterations
-    %   tol - Tolerance for convergence
-    %   lb - Lower bounds (4x1 vector)
-    %   ub - Upper bounds (4x1 vector)
-    % Outputs:
-    %   x - Solution vector
-    %   converged - Boolean indicating if convergence was achieved
-
-    x = x0;
-    converged = false;
-
-    for iter = 1:max_iter
-        F = myfun(x);            % Compute residuals
-        J = jacobian_num(x);     % Compute Jacobian matrix
-
-        % Check if Jacobian is singular
-        if rcond(J) < eps
-            break; % Singular Jacobian, cannot proceed
-        end
-
-        delta = -J \ F;           % Compute update
-
-        alpha = 1; % Reset alpha at each iteration
-
-        % Line search to ensure sufficient decrease and within bounds
-        while true
-            x_new = x + alpha * delta;
-
-            % Check if x_new is within bounds
-            if any(x_new < lb) || any(x_new > ub)
-                % Step goes out of bounds, reduce alpha
-                alpha = alpha / 2;
-                if alpha < 1e-4
-                    break; % Give up on this step
-                end
-                continue; % Try with reduced alpha
-            end
-
-            F_new = myfun(x_new);
-
-            if norm(F_new) < norm(F) || alpha < 1e-4
-                break; % Accept the step
-            end
-
-            alpha = alpha / 2; % Reduce step size and retry
-        end
-
-        x = x_new; % Update solution
-
-        if norm(delta) < tol
-            converged = true;
-            break;
-        end
-    end
-end
-
-function J = jacobian_num(x)
-    % jacobian_num computes the Jacobian matrix numerically using central differences
-    % Input:
-    %   x - Current solution vector (4x1)
-    % Output:
-    %   J - Jacobian matrix (4x4)
-
-    epsilon = 1e-6;
-    n = length(x);          % Number of variables (4)
-    F0 = myfun(x);          % Current residuals (4x1)
-    m = length(F0);         % Number of residuals (4)
-    J = zeros(m, n);        % Initialize Jacobian (4x4)
-
-    for i = 1:n
-        x_eps_plus = x;
-        x_eps_minus = x;
-        x_eps_plus(i) = x_eps_plus(i) + epsilon;
-        x_eps_minus(i) = x_eps_minus(i) - epsilon;
-        F_plus = myfun(x_eps_plus);
-        F_minus = myfun(x_eps_minus);
-        J(:, i) = (F_plus - F_minus) / (2 * epsilon); % Central difference
-    end
-end
-
 function F = myfun(x)
     % myfun computes the residuals of the system of equations
     % Input:
     %   x - vector of variables [x3; x4; y3; y4]
     % Output:
-    %   F - vector of residuals [f12; f13; f24; f14]
+    %   F - vector of residuals [f12; f13; f24; f34]
 
     F_original = compute_residuals(x);
     
@@ -256,35 +178,43 @@ function F_original = compute_residuals(x)
     x4 = x(2);
     y3 = x(3);
     y4 = x(4);
+    
+    epsilon = 1e-8; % Small value to prevent division by zero or negative roots
 
-    % Compute terms with exponents expressed as (-3/2)
-    term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
-    term_b = ((1 - x3)^2 + y3^2)^(-3/2);
-    term_c = ((-1 - x4)^2 + y4^2)^(-3/2);
-    term_d = ((1 - x4)^2 + y4^2)^(-3/2);
-    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
-    term_f = ((x3 - 1)^2 + y3^2)^(-3/2);
+    % % Compute terms with exponents expressed as (-3/2)
+    % term_a = ((-1 - x3)^2 + y3^2 + epsilon)^(-3/2);
+    % term_b = ((1 - x3)^2 + y3^2 + epsilon)^(-3/2);
+    % term_c = ((-1 - x4)^2 + y4^2 + epsilon)^(-3/2);
+    % term_d = ((1 - x4)^2 + y4^2 + epsilon)^(-3/2);
+    % term_e = ((x3 - x4)^2 + (y3 - y4)^2 + epsilon)^(-3/2);
+    % term_f = ((x3 - 1)^2 + y3^2 + epsilon)^(-3/2);
 
-    % For f12:
-    f12 = 2 * m3 * (term_a - term_b) * y3 + ...
-          2 * m4 * (term_c - term_d) * y4;
+    % % For f12:
+    % f12 = 2 * m3 * (term_a - term_b) * y3 + ...
+    %       2 * m4 * (term_c - term_d) * y4;
 
-    % For f13:
-    f13 = -2 * m2 * (1/8 - term_b) * y3 + ...
-          m4 * (term_c - term_e) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4));
+    % % For f13:
+    % f13 = -2 * m2 * (1/8 - term_b) * y3 + ...
+    %       m4 * (term_c - term_e) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4));
 
-    % For f24:
-    f24 = 2 * m1 * (1/8 - term_c) * y4 + ...
-          m3 * (term_f - term_e) * (-y3*(1 - x4) - y4*(x3 - 1));
+    % % For f24:
+    % f24 = 2 * m1 * (1/8 - term_c) * y4 + ...
+    %       m3 * (term_f - term_e) * (-y3*(1 - x4) - y4*(x3 - 1));
 
-    % For f34:
-    f34 = m1 * (term_a - term_c) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4)) + ...
-          m2 * (term_b - term_d) * (y3*(1 - x4) + y4*(x3 - 1));
+    % % For f34:
+    % f34 = m1 * (term_a - term_c) * ((x4 + 1)*(y4 - y3) + y3*(x3 - x4)) + ...
+    %       m2 * (term_b - term_d) * (y3*(1 - x4) + y4*(x3 - 1));
+
+    f12 = 2 * m3 * (((-1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1)) * y3 + 2 * m4 * (((-1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1) - ((1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1)) * y4;
+    f13 = -0.2e1 * m2 * (sqrt(0.4e1) / 0.16e2 - (((1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1))) * y3 + (m4 * (((-1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1) - ((x3 - x4) ^ 2 + (y3 - y4) ^ 2) ^ (-0.3e1 / 0.2e1)) * ((x4 + 1) * (y4 - y3) + y4 * (x3 - x4)));
+    f24 = 0.2e1 * m1 * (sqrt(0.4e1) / 0.16e2 - (((-1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1))) * y4 + (m3 * (((x3 - 1) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((x3 - x4) ^ 2 + (y3 - y4) ^ 2) ^ (-0.3e1 / 0.2e1)) * (-y3 * (1 - x4) - y4 * (x3 - 1)));
+    f34 = m1 * (((-1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((-1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1)) * ((x4 + 1) * (y4 - y3) + y4 * (x3 - x4)) + m2 * (((1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1)) * (y3 * (1 - x4) + y4 * (x3 - 1));
+
+
 
     % Combine residuals
     F_original = [f12; f13; f24; f34];
 end
-
 
 function f14 = compute_f14(x)
     % compute_f14 computes f14 for a given solution
@@ -303,16 +233,6 @@ function f14 = compute_f14(x)
     x4 = x(2);
     y3 = x(3);
     y4 = x(4);
-
-    % Define constant term
-    term_constant = 1/8; % sqrt(4)/16 simplifies to 1/8
-
-    % Compute terms with exponents expressed as (-3/2)
-    term_a = ((-1 - x3)^2 + y3^2)^(-3/2);
-    term_d = ((1 - x4)^2 + y4^2)^(-3/2);
-    term_e = ((x3 - x4)^2 + (y3 - y4)^2)^(-3/2);
-
-    % Compute f14 using the updated equation with masses
-    f14 = -2 * m2 * (term_constant - term_d) * y4 + ...
-          m3 * (term_a - term_e) * (-(x4 + 1)*(y4 - y3) - y4*(x3 - x4));
+    
+    f14 = -0.2e1 * m2 * (sqrt(0.4e1) / 0.16e2 - (((1 - x4) ^ 2 + y4 ^ 2) ^ (-0.3e1 / 0.2e1))) * y4 + (m3 * (((-1 - x3) ^ 2 + y3 ^ 2) ^ (-0.3e1 / 0.2e1) - ((x3 - x4) ^ 2 + (y3 - y4) ^ 2) ^ (-0.3e1 / 0.2e1)) * (-(x4 + 1) * (y4 - y3) - y4 * (x3 - x4)));
 end
