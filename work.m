@@ -1,3 +1,9 @@
+% Comment for Nishan: lower bound and upper bound can be changed to fit the problem
+%it can be changed from the lines 16-17
+%if you would like to change the masses, it would need to be changed from two functions
+% function F_original = compute_residuals(x) in lines (246-249)
+% function function f14 = compute_f14(x) in lines (294-297)
+
 % fourbody_trial_optimized.m
 % Script to find multiple concave central configurations for the four-body problem
 % using Newton's Method with grid sampling and constraints.
@@ -6,12 +12,9 @@
 clear;
 clc;
 
-
-% -------------------------------------------------------------------------
-% Define Expanded Bounds for the Variables [x3; x4; y3; y4]
-% -------------------------------------------------------------------------
+% Define expanded bounds for the variables [x3; x4; y3; y4]
 lb = [1e-3; -1; 1.73; 1e-3];     % Lower bounds with non-zero minima
-ub = [3; 1; 5; 3.73]; 
+ub = [3; 1; 5; 3.73];           % Upper bounds expanded to include previous solutions
 
 % Define the number of divisions for each variable in the grid
 num_divisions = [20, 20, 20, 20]; % Increased from 10 to 20 divisions per variable
@@ -22,8 +25,9 @@ x4_vals = linspace(lb(2), ub(2), num_divisions(2)); % so for x3 there would be 2
 y3_vals = linspace(lb(3), ub(3), num_divisions(3));
 y4_vals = linspace(lb(4), ub(4), num_divisions(4));
 
+
 % Create all combinations of initial guesses
-[X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals); % This will create a grid of values 
+[X3_grid, X4_grid, Y3_grid, Y4_grid] = ndgrid(x3_vals, x4_vals, y3_vals, y4_vals); %This will create a grid of values 
 grid_guesses = [X3_grid(:), X4_grid(:), Y3_grid(:), Y4_grid(:)];
 
 % Generate additional random initial guesses
@@ -52,7 +56,7 @@ parfor i = 1:num_guesses
     x0 = initial_guesses(i, :)';
     [x_sol, converged] = newton_method(x0, max_iter, tol, lb, ub);
     if converged
-        % Compute only f14 to check acceptability
+        % Compute f14 to check acceptability
         f14 = compute_f14(x_sol);
         if abs(f14) < tol
             % Store the solution and f14 value
@@ -73,10 +77,11 @@ solutions = solutions(:, valid_indices);
 f14_values = f14_values(valid_indices);
 
 fprintf('Number of converged solutions: %d\n', size(solutions, 2));
-    % Remove duplicate solutions with enhanced filtering
+
+% Remove duplicate solutions with enhanced filtering
 tolerance = 1e-4; % Define a tolerance for considering solutions as duplicates
-    
-    % Initialize empty arrays for unique solutions and their f14 values
+
+% Initialize empty arrays for unique solutions and their f14 values
 unique_solutions = [];
 unique_f14_values = [];
 
@@ -97,22 +102,31 @@ for i = 1:size(solutions, 2)
         end
     end
 end
-    
+
 fprintf('Number of unique solutions after filtering: %d\n', size(unique_solutions, 1));
-    
+
 % Define additional filtering criteria
 min_x3 = 1e-3; % Minimum allowable x3
 min_y4 = 1e-3; % Minimum allowable y4
-    
+
 % Apply filters
-filtered_indices = (unique_solutions(:, 1) >= min_x3) & (unique_solutions(:, 4) >= min_y4);
-filtered_solutions = unique_solutions(filtered_indices, :);
-filtered_f14_values = unique_f14_values(filtered_indices);
-    
+if ~isempty(unique_solutions)
+    % Apply filters
+    filtered_indices = (unique_solutions(:, 1) >= min_x3) & (unique_solutions(:, 4) >= min_y4);
+    filtered_solutions = unique_solutions(filtered_indices, :);
+    filtered_f14_values = unique_f14_values(filtered_indices);
+else
+    % No solutions found
+    filtered_solutions = [];
+    filtered_f14_values = [];
+    fprintf('No solutions found to apply filters.\n');
+end
+
+
 fprintf('Number of filtered solutions: %d\n', size(filtered_solutions, 1));
 
 % Display the filtered acceptable solutions
-disp('Filtered Acceptable Solutions where abs(f34) < tolerance:');
+disp('Filtered Acceptable Solutions where abs(f14) < tolerance:');
 for i = 1:size(filtered_solutions, 1)
     x = filtered_solutions(i, :)';
     disp(['Solution ', num2str(i), ':']);
@@ -120,7 +134,7 @@ for i = 1:size(filtered_solutions, 1)
     disp(['x4 = ', num2str(x(2))]);
     disp(['y3 = ', num2str(x(3))]);
     disp(['y4 = ', num2str(x(4))]);
-    disp(['f34 = ', num2str(filtered_f34_values(i))]);
+    disp(['f14 = ', num2str(filtered_f14_values(i))]);
     disp('---------------------------');
 end
 
@@ -196,10 +210,10 @@ function J = jacobian_num(x)
     %   J - Jacobian matrix (4x4)
 
     epsilon = 1e-6;
+    n = length(x);          % Number of variables (4)
     F0 = myfun(x);          % Current residuals (4x1)
-    m = length(F0);                 % Number of residuals (4)
-    n = length(x);                  % Number of variables (4)
-    J = zeros(m, n);                % Initialize Jacobian (4x4)
+    m = length(F0);         % Number of residuals (4)
+    J = zeros(m, n);        % Initialize Jacobian (4x4)
 
     for i = 1:n
         x_eps_plus = x;
@@ -217,10 +231,10 @@ function F = myfun(x)
     % Input:
     %   x - vector of variables [x3; x4; y3; y4]
     % Output:
-    %   F - vector of residuals [f12; f13; f24; f34]
+    %   F - vector of residuals [f12; f13; f24; f14]
 
     F_original = compute_residuals(x);
-
+    
     % Return only the original residuals without penalties
     F = F_original;
 end
@@ -302,4 +316,3 @@ function f14 = compute_f14(x)
     f14 = -2 * m2 * (term_constant - term_d) * y4 + ...
           m3 * (term_a - term_e) * (-(x4 + 1)*(y4 - y3) - y4*(x3 - x4));
 end
-
